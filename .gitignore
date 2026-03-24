@@ -42,3 +42,10 @@ coverage/
 # Misc
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma local DB
+prisma/*.db
+prisma/*.db-journal
+
+# Claude Code local settings
+.claude/settings.local.json
