@@ -27,8 +27,8 @@ A web-based IDE that lets you build full-stack applications via natural language
 
 Early-stage build, planned across three phases (~4 weeks):
 
-1. **Foundation (current)** — IDE shell, file tree, Monaco editor, sandboxed execution, GitHub auth.
-2. **AI Agent Layer** — LangChain agents with file/run tools, codebase indexing, chat-driven code synthesis.
+1. **Foundation** — IDE shell, file tree, Monaco editor, sandboxed execution, GitHub auth.
+2. **AI Agent Layer (current)** — LangChain ReAct agent with file tools, streaming chat, persistent run history.
 3. **Collaboration & Polish** — Yjs real-time sync, AI agents as collaborators, sharing, deploy pipeline.
 
 ## Getting Started
@@ -61,9 +61,17 @@ Open <http://localhost:3000> and sign in with GitHub.
 - File tree with create / rename / delete and folder expansion.
 - Project lifecycle: create from templates (Blank, Node, Express, Vite + React).
 - Output panel + preview iframe wired to a WebContainer sandbox (`Run` button mounts files, runs `npm install`, then `dev` or `start`).
-- Agent panel placeholder for Phase 2.
 - GitHub OAuth via NextAuth, sessions persisted to SQLite via Prisma adapter.
 - COOP/COEP headers on `/ide/*` for WebContainer cross-origin isolation.
+
+## What's in Phase 2
+
+- LangChain ReAct agent powered by GPT-4o, orchestrated through LangGraph.
+- Project-aware tools: `list_files`, `read_file`, `write_file`, `delete_file`, `search_files`, `install_package`.
+- Streaming SSE endpoint at `/api/agent/run` emitting tokens, tool calls, file changes, and run summaries.
+- Agent panel with streaming chat, expandable tool-call cards, persistent history per project.
+- Agent edits flow back into the workspace live — file tree, open editor tabs, and DB stay in sync.
+- Per-project token usage meter and full run/message persistence (`AgentRun` + `Message` tables).
 
 ## Project Layout
 

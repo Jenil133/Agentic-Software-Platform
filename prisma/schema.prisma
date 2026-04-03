@@ -84,19 +84,34 @@ model File {
 }
 
 model AgentRun {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   projectId  String
   userId     String
   prompt     String
-  status     String   @default("pending")
-  toolCalls  String?
+  status     String    @default("pending")
   result     String?
-  tokensUsed Int      @default(0)
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  startedAt  DateTime @default(now())
+  tokensUsed Int       @default(0)
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   Message[]
+  startedAt  DateTime  @default(now())
   finishedAt DateTime?
 
   @@index([projectId])
   @@index([userId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  agentRunId String
+  role       String
+  content    String
+  toolName   String?
+  toolCallId String?
+  toolArgs   String?
+  toolResult String?
+  agentRun   AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([agentRunId])
 }

@@ -12,6 +12,7 @@ import { OutputPanel } from "./OutputPanel";
 import { PreviewPanel } from "./PreviewPanel";
 import type { ProjectFile, EditorTab } from "@/lib/types";
 import { getFileLanguage } from "@/lib/file-tree";
+import type { AgentEvent } from "@/lib/agent/types";
 
 const MonacoEditor = dynamic(() => import("./MonacoEditor"), { ssr: false });
 
@@ -191,6 +192,51 @@ export function Workspace({ project, files: initialFiles }: Props) {
     [project.id, log],
   );
 
+  const onAgentFileChange = useCallback(
+    (e: Extract<AgentEvent, { type: "file_change" }>) => {
+      if (e.action === "delete") {
+        setFiles((fs) => fs.filter((f) => f.path !== e.path));
+        setTabs((ts) => ts.filter((t) => t.path !== e.path));
+        setActivePath((p) => (p === e.path ? null : p));
+        log(`[agent] deleted ${e.path}`);
+      } else if (e.action === "write" && typeof e.contents === "string") {
+        setFiles((fs) => {
+          const idx = fs.findIndex((f) => f.path === e.path);
+          if (idx === -1)
+            return [
+              ...fs,
+              { id: e.path, path: e.path, contents: e.contents! },
+            ];
+          const next = [...fs];
+          next[idx] = { ...next[idx], contents: e.contents! };
+          return next;
+        });
+        setTabs((ts) =>
+          ts.map((t) =>
+            t.path === e.path
+              ? { ...t, contents: e.contents!, dirty: false }
+              : t,
+          ),
+        );
+        log(`[agent] wrote ${e.path} (${e.contents.length} bytes)`);
+      } else if (e.action === "rename" && e.newPath) {
+        setFiles((fs) =>
+          fs.map((f) =>
+            f.path === e.path ? { ...f, path: e.newPath! } : f,
+          ),
+        );
+        setTabs((ts) =>
+          ts.map((t) =>
+            t.path === e.path ? { ...t, path: e.newPath! } : t,
+          ),
+        );
+        setActivePath((p) => (p === e.path ? e.newPath! : p));
+        log(`[agent] renamed ${e.path} → ${e.newPath}`);
+      }
+    },
+    [log],
+  );
+
   const runProject = useCallback(async () => {
     if (running) return;
     setRunning(true);
@@ -343,7 +389,10 @@ export function Workspace({ project, files: initialFiles }: Props) {
           <PanelResizeHandle className="panel-resizer w-px" />
 
           <Panel defaultSize={30} minSize={18}>
-            <AgentPanel projectId={project.id} />
+            <AgentPanel
+              projectId={project.id}
+              onFileChange={onAgentFileChange}
+            />
           </Panel>
         </PanelGroup>
       </div>
