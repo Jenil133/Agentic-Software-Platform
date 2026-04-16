@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { canEdit, getProjectAccess } from "@/lib/access";
 
 export async function POST(
   req: Request,
@@ -11,11 +12,9 @@ export async function POST(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const project = await prisma.project.findFirst({
-    where: { id, ownerId: session.user.id },
-  });
-  if (!project) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access || !canEdit(access.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
   const path = (body.path as string | undefined)?.trim();

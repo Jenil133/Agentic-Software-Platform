@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-
-async function authorize(projectId: string, userId: string) {
-  return prisma.project.findFirst({
-    where: { id: projectId, ownerId: userId },
-  });
-}
+import { canEdit, getProjectAccess } from "@/lib/access";
 
 export async function PUT(
   req: Request,
@@ -17,9 +12,9 @@ export async function PUT(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id, path: pathSegs } = await ctx.params;
-  const project = await authorize(id, session.user.id);
-  if (!project) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access || !canEdit(access.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const path = pathSegs.join("/");
   const body = await req.json().catch(() => ({}));
@@ -53,9 +48,9 @@ export async function DELETE(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id, path: pathSegs } = await ctx.params;
-  const project = await authorize(id, session.user.id);
-  if (!project) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access || !canEdit(access.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const path = pathSegs.join("/");
   await prisma.file.delete({

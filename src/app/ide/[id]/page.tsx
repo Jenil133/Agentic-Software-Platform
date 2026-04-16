@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { Workspace } from "@/components/ide/Workspace";
+import { getProjectAccess } from "@/lib/access";
 
 export default async function IDEPage({
   params,
@@ -12,8 +13,11 @@ export default async function IDEPage({
   if (!session?.user?.id) redirect("/signin?callbackUrl=/projects");
   const { id } = await params;
 
-  const project = await prisma.project.findFirst({
-    where: { id, ownerId: session.user.id },
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access) notFound();
+
+  const project = await prisma.project.findUnique({
+    where: { id },
     include: { files: { orderBy: { path: "asc" } } },
   });
   if (!project) notFound();
@@ -30,6 +34,12 @@ export default async function IDEPage({
         path: f.path,
         contents: f.contents,
       }))}
+      currentUser={{
+        id: session.user.id,
+        name: session.user.name ?? session.user.email ?? "Anonymous",
+        image: session.user.image ?? null,
+      }}
+      role={access.role}
     />
   );
 }

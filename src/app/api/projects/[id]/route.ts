@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
-
-async function ownProject(id: string, userId: string) {
-  return prisma.project.findFirst({ where: { id, ownerId: userId } });
-}
+import { getProjectAccess } from "@/lib/access";
 
 export async function GET(
   _req: Request,
@@ -15,14 +12,15 @@ export async function GET(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const project = await prisma.project.findFirst({
-    where: { id, ownerId: session.user.id },
-    include: { files: { orderBy: { path: "asc" } } },
-  });
-  if (!project) {
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
-  return NextResponse.json({ project });
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: { files: { orderBy: { path: "asc" } } },
+  });
+  return NextResponse.json({ project, role: access.role });
 }
 
 export async function DELETE(
@@ -34,9 +32,9 @@ export async function DELETE(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const owned = await ownProject(id, session.user.id);
-  if (!owned) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+  const access = await getProjectAccess(id, session.user.id);
+  if (!access || access.role !== "owner") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   await prisma.project.delete({ where: { id } });
   return NextResponse.json({ ok: true });

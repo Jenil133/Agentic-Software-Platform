@@ -8,16 +8,18 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  accounts      Account[]
-  sessions      Session[]
-  projects      Project[]
-  agentRuns     AgentRun[]
-  createdAt     DateTime  @default(now())
+  id              String           @id @default(cuid())
+  name            String?
+  email           String?          @unique
+  emailVerified   DateTime?
+  image           String?
+  accounts        Account[]
+  sessions        Session[]
+  projects        Project[]
+  agentRuns       AgentRun[]
+  memberships     ProjectMember[]
+  createdShares   ShareToken[]
+  createdAt       DateTime         @default(now())
 }
 
 model Account {
@@ -56,18 +58,64 @@ model VerificationToken {
 }
 
 model Project {
-  id          String     @id @default(cuid())
+  id          String          @id @default(cuid())
   name        String
   description String?
-  template    String     @default("blank")
+  template    String          @default("blank")
   ownerId     String
-  owner       User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner       User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   files       File[]
   agentRuns   AgentRun[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  members     ProjectMember[]
+  shares      ShareToken[]
+  deployments Deployment[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   @@index([ownerId])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  role      String   @default("editor")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ShareToken {
+  id          String    @id @default(cuid())
+  token       String    @unique
+  projectId   String
+  createdById String
+  role        String    @default("editor")
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([projectId])
+}
+
+model Deployment {
+  id        String    @id @default(cuid())
+  projectId String
+  status    String    @default("pending")
+  url       String?
+  provider  String    @default("vercel")
+  log       String?
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  finishedAt DateTime?
+
+  @@index([projectId])
 }
 
 model File {

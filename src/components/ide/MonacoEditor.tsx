@@ -1,16 +1,25 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
+import * as Y from "yjs";
+import { MonacoBinding } from "y-monaco";
+import type { editor } from "monaco-editor";
+import { useCollab } from "@/lib/collab/provider";
 
 type Props = {
   path: string;
-  value: string;
   language: string;
   onChange: (value: string) => void;
 };
 
-export default function MonacoEditor({ path, value, language, onChange }: Props) {
-  const onMount: OnMount = (editor, monaco) => {
+export default function MonacoEditor({ path, language, onChange }: Props) {
+  const { provider, files } = useCollab();
+  const bindingRef = useRef<MonacoBinding | null>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+
+  const onMount: OnMount = (ed, monaco) => {
+    editorRef.current = ed;
     monaco.editor.defineTheme("agentic-dark", {
       base: "vs-dark",
       inherit: true,
@@ -22,14 +31,51 @@ export default function MonacoEditor({ path, value, language, onChange }: Props)
       },
     });
     monaco.editor.setTheme("agentic-dark");
-    editor.focus();
+    ed.focus();
+
+    let ytext = files.get(path);
+    if (!ytext) {
+      ytext = new Y.Text();
+      files.set(path, ytext);
+    }
+
+    bindingRef.current?.destroy();
+    bindingRef.current = new MonacoBinding(
+      ytext,
+      ed.getModel()!,
+      new Set([ed]),
+      provider.awareness,
+    );
+
+    const updateCursor = () => {
+      const pos = ed.getPosition();
+      if (!pos) return;
+      provider.awareness.setLocalStateField("cursor", {
+        path,
+        line: pos.lineNumber,
+        column: pos.column,
+      });
+    };
+    const sub = ed.onDidChangeCursorPosition(updateCursor);
+    updateCursor();
+
+    return () => sub.dispose();
   };
+
+  useEffect(() => {
+    return () => {
+      bindingRef.current?.destroy();
+      bindingRef.current = null;
+    };
+  }, [path]);
+
+  const initial = files.get(path)?.toString() ?? "";
 
   return (
     <Editor
       key={path}
       path={path}
-      defaultValue={value}
+      defaultValue={initial}
       language={language}
       onMount={onMount}
       onChange={(v) => onChange(v ?? "")}

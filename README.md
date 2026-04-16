@@ -25,11 +25,11 @@ A web-based IDE that lets you build full-stack applications via natural language
 
 ## Project Status
 
-Early-stage build, planned across three phases (~4 weeks):
+Built across three phases (~4 weeks):
 
 1. **Foundation** — IDE shell, file tree, Monaco editor, sandboxed execution, GitHub auth.
-2. **AI Agent Layer (current)** — LangChain ReAct agent with file tools, streaming chat, persistent run history.
-3. **Collaboration & Polish** — Yjs real-time sync, AI agents as collaborators, sharing, deploy pipeline.
+2. **AI Agent Layer** — LangChain ReAct agent with file tools, streaming chat, persistent run history.
+3. **Collaboration & Polish (current)** — Yjs real-time sync, sharing, deploy pipeline.
 
 ## Getting Started
 
@@ -72,6 +72,15 @@ Open <http://localhost:3000> and sign in with GitHub.
 - Agent panel with streaming chat, expandable tool-call cards, persistent history per project.
 - Agent edits flow back into the workspace live — file tree, open editor tabs, and DB stay in sync.
 - Per-project token usage meter and full run/message persistence (`AgentRun` + `Message` tables).
+
+## What's in Phase 3
+
+- Real-time collaboration on every file via **Yjs CRDTs** with `y-monaco` binding and `y-webrtc` transport, so concurrent edits merge without conflict.
+- Live presence: per-user color, name, avatar, and cursor position broadcast through Yjs awareness; presence avatars render in the workspace header.
+- **Share & permissions:** `ProjectMember` (owner/editor/viewer roles) and `ShareToken` models; share dialog generates revocable invite links served by `/share/[token]`. Invitees auto-join on sign-in.
+- All API routes gated through a single `getProjectAccess` helper so non-owners see shared projects but can't delete them.
+- **Deploy pipeline** with `Deployment` model and `/api/projects/[id]/deploy` (mocked Vercel build → public URL); the `DeployButton` polls until ready.
+- New marketing landing page with feature cards.
 
 ## Project Layout
 

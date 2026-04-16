@@ -4,24 +4,56 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, Save, Sparkles, Play, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  Sparkles,
+  Play,
+  Loader2,
+  Share2,
+} from "lucide-react";
 import { FileTree } from "./FileTree";
 import { EditorTabs } from "./EditorTabs";
 import { AgentPanel } from "./AgentPanel";
 import { OutputPanel } from "./OutputPanel";
 import { PreviewPanel } from "./PreviewPanel";
+import { ShareDialog } from "./ShareDialog";
+import { DeployButton } from "./DeployButton";
+import { PresenceAvatars } from "./PresenceAvatars";
+import { CollabProvider, useCollab } from "@/lib/collab/provider";
 import type { ProjectFile, EditorTab } from "@/lib/types";
 import { getFileLanguage } from "@/lib/file-tree";
 import type { AgentEvent } from "@/lib/agent/types";
 
 const MonacoEditor = dynamic(() => import("./MonacoEditor"), { ssr: false });
 
+type CurrentUser = { id: string; name: string; image: string | null };
+
 type Props = {
   project: { id: string; name: string; template: string };
   files: ProjectFile[];
+  currentUser: CurrentUser;
+  role: "owner" | "editor" | "viewer";
 };
 
-export function Workspace({ project, files: initialFiles }: Props) {
+export function Workspace(props: Props) {
+  return (
+    <CollabProvider
+      projectId={props.project.id}
+      user={props.currentUser}
+      initialFiles={props.files.map((f) => ({
+        path: f.path,
+        contents: f.contents,
+      }))}
+    >
+      <WorkspaceInner {...props} />
+    </CollabProvider>
+  );
+}
+
+function WorkspaceInner({ project, files: initialFiles, role }: Props) {
+  const { peers, status } = useCollab();
+
   const [files, setFiles] = useState<ProjectFile[]>(initialFiles);
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -31,6 +63,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
   ]);
   const [running, setRunning] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -52,10 +85,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
       }
       const file = files.find((f) => f.path === path);
       if (!file) return;
-      setTabs((t) => [
-        ...t,
-        { path, contents: file.contents, dirty: false },
-      ]);
+      setTabs((t) => [...t, { path, contents: file.contents, dirty: false }]);
       setActivePath(path);
     },
     [files, tabs],
@@ -76,6 +106,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
 
   const persistFile = useCallback(
     async (path: string, contents: string) => {
+      if (role === "viewer") return;
       setSavingPath(path);
       try {
         const res = await fetch(`/api/projects/${project.id}/files`, {
@@ -86,8 +117,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
         if (!res.ok) throw new Error("save failed");
         setFiles((fs) => {
           const idx = fs.findIndex((f) => f.path === path);
-          if (idx === -1)
-            return [...fs, { id: path, path, contents }];
+          if (idx === -1) return [...fs, { id: path, path, contents }];
           const next = [...fs];
           next[idx] = { ...next[idx], contents };
           return next;
@@ -101,7 +131,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
         setSavingPath((cur) => (cur === path ? null : cur));
       }
     },
-    [project.id, log],
+    [project.id, log, role],
   );
 
   const onChangeTab = useCallback(
@@ -203,10 +233,7 @@ export function Workspace({ project, files: initialFiles }: Props) {
         setFiles((fs) => {
           const idx = fs.findIndex((f) => f.path === e.path);
           if (idx === -1)
-            return [
-              ...fs,
-              { id: e.path, path: e.path, contents: e.contents! },
-            ];
+            return [...fs, { id: e.path, path: e.path, contents: e.contents! }];
           const next = [...fs];
           next[idx] = { ...next[idx], contents: e.contents! };
           return next;
@@ -221,14 +248,10 @@ export function Workspace({ project, files: initialFiles }: Props) {
         log(`[agent] wrote ${e.path} (${e.contents.length} bytes)`);
       } else if (e.action === "rename" && e.newPath) {
         setFiles((fs) =>
-          fs.map((f) =>
-            f.path === e.path ? { ...f, path: e.newPath! } : f,
-          ),
+          fs.map((f) => (f.path === e.path ? { ...f, path: e.newPath! } : f)),
         );
         setTabs((ts) =>
-          ts.map((t) =>
-            t.path === e.path ? { ...t, path: e.newPath! } : t,
-          ),
+          ts.map((t) => (t.path === e.path ? { ...t, path: e.newPath! } : t)),
         );
         setActivePath((p) => (p === e.path ? e.newPath! : p));
         log(`[agent] renamed ${e.path} → ${e.newPath}`);
@@ -289,25 +312,53 @@ export function Workspace({ project, files: initialFiles }: Props) {
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
       <header className="flex items-center justify-between px-4 h-12 border-b border-zinc-800 shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/projects"
-            className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200 transition"
+            className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200 transition shrink-0"
           >
             <ArrowLeft className="size-4" />
             Projects
           </Link>
-          <span className="text-zinc-700">/</span>
-          <span className="text-sm font-medium">{project.name}</span>
-          <span className="text-xs text-zinc-600">({project.template})</span>
+          <span className="text-zinc-700 shrink-0">/</span>
+          <span className="text-sm font-medium truncate">{project.name}</span>
+          <span className="text-xs text-zinc-600 shrink-0">
+            ({project.template})
+          </span>
+          {role !== "owner" && (
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 px-1.5 py-0.5 rounded border border-zinc-800 shrink-0">
+              {role}
+            </span>
+          )}
+          <span
+            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
+              status === "connected"
+                ? "text-emerald-400 border border-emerald-900/60 bg-emerald-950/40"
+                : "text-zinc-500 border border-zinc-800"
+            }`}
+          >
+            {status === "connected" ? "live" : status}
+          </span>
         </div>
         <div className="flex items-center gap-2">
+          <PresenceAvatars peers={peers} />
           {savingPath && (
             <span className="text-xs text-zinc-500 inline-flex items-center gap-1">
               <Loader2 className="size-3 animate-spin" />
               saving
             </span>
           )}
+          {role === "owner" && (
+            <button
+              type="button"
+              onClick={() => setShareOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-md border border-zinc-800 hover:border-zinc-600 transition"
+            >
+              <Share2 className="size-3.5" />
+              Share
+            </button>
+          )}
+          <DeployButton projectId={project.id} canDeploy={role !== "viewer"} />
           <button
             type="button"
             onClick={saveActive}
@@ -362,7 +413,6 @@ export function Workspace({ project, files: initialFiles }: Props) {
                     {activeTab ? (
                       <MonacoEditor
                         path={activeTab.path}
-                        value={activeTab.contents}
                         language={getFileLanguage(activeTab.path)}
                         onChange={(v) => onChangeTab(activeTab.path, v)}
                       />
@@ -396,6 +446,13 @@ export function Workspace({ project, files: initialFiles }: Props) {
           </Panel>
         </PanelGroup>
       </div>
+
+      {shareOpen && (
+        <ShareDialog
+          projectId={project.id}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   );
 }
